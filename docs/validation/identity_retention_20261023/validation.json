@@ -1,0 +1,32 @@
+{
+  "revision": "ctm-identity-gated-retention-v13",
+  "date": "2026-10-23",
+  "tests": 59,
+  "failures": 0,
+  "errors": 0,
+  "suites": [
+    "test_nrsm",
+    "test_action_reward",
+    "test_integration",
+    "test_runtime",
+    "test_checkpoint"
+  ],
+  "platform": "CPU, affinity2/3, nice15, single BLAS/OMP thread",
+  "source_semantics": "Only one executable NRSM assignment changes; AST comparison passed after stripping docstrings.",
+  "unchanged_source_sha256": {
+    "recall2imagine/reward_nets.py": "60737aa88ba1ca6456217c106daa7544c9317f9bbf0f424cda22dc308c3f86cb",
+    "recall2imagine/agent.py": "9a55f06cb72f67f9b58ea83855c6c13ff18e0f40636247bb7b1aba6d48d86a4a",
+    "recall2imagine/configs.yaml": "2c7a116629217108afd71bfa2e2d8cb48524b860fcce5e38bdc83645c2354669",
+    "recall2imagine/jaxutils.py": "b22714071cbd96cd3871da4005dce72d9c03aad85a35da7941f3c0fd0c164be0"
+  },
+  "model_parameter_shapes_unchanged": true,
+  "reward_loss_action_alignment_unchanged": true,
+  "formulas": {
+    "labels": 75,
+    "unchanged": 71,
+    "changed": 4
+  },
+  "paper_compilation": "Staged source compiled successfully; production receipt recorded after deployment.",
+  "scope": "Tests establish numeric/runtime contracts, not learning, GPU throughput or policy success.",
+  "test_log_sha256": "431bbbfec9e4c6b07cccb85afa8a2893a42bfc4a5fe97d8db56f6fa79a3d5378"
+}

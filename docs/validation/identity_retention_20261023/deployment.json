@@ -1,0 +1,125 @@
+{
+  "files": [
+    {
+      "staged": "C:\\Users\\Administrator\\Desktop\\CTMNavigation\\tmp\\ctm_identity_v13_20261023\\CTWMR2I\\docs\\FORMULA_ALIGNMENT.md",
+      "target": "C:\\Users\\Administrator\\Desktop\\CTWMR2I\\docs\\FORMULA_ALIGNMENT.md",
+      "before_sha256": "91e4d35a1f74e31a75979846760e9257b5f42d622d602e621e77fbceb9d5e8d1",
+      "after_sha256": "d18ab41ba3e9440b85805e663a165b16c2b758450bdd97d504b3e9a38b55842e"
+    },
+    {
+      "staged": "C:\\Users\\Administrator\\Desktop\\CTMNavigation\\tmp\\ctm_identity_v13_20261023\\CTWMR2I\\docs\\FORMULA_AUDIT.csv",
+      "target": "C:\\Users\\Administrator\\Desktop\\CTWMR2I\\docs\\FORMULA_AUDIT.csv",
+      "before_sha256": "e5515c96297949188a5cc571a011d1c97b4979483b6bd14897abb0b9e19c58f2",
+      "after_sha256": "550242b965bedcaae154f50a89f5244ea2f287df05cfa2e167fb14c3d0cdaad6"
+    },
+    {
+      "staged": "C:\\Users\\Administrator\\Desktop\\CTMNavigation\\tmp\\ctm_identity_v13_20261023\\CTWMR2I\\docs\\FORMULA_AUDIT.json",
+      "target": "C:\\Users\\Administrator\\Desktop\\CTWMR2I\\docs\\FORMULA_AUDIT.json",
+      "before_sha256": "969adf1627e8a4ccccf436d849e16cae7cce487a17b39292702bc0ac46856004",
+      "after_sha256": "7efea61d0431cd34b5430bffb144927e6ff837f89d4f5fcc4ac902efab54ea81"
+    },
+    {
+      "staged": "C:\\Users\\Administrator\\Desktop\\CTMNavigation\\tmp\\ctm_identity_v13_20261023\\CTWMR2I\\docs\\FORMULA_AUDIT.md",
+      "target": "C:\\Users\\Administrator\\Desktop\\CTWMR2I\\docs\\FORMULA_AUDIT.md",
+      "before_sha256": "4781309c71d339c5cc3f457b4ecaf304466bd755e66925512fdb7a8cbfff6d00",
+      "after_sha256": "d18ab41ba3e9440b85805e663a165b16c2b758450bdd97d504b3e9a38b55842e"
+    },
+    {
+      "staged": "C:\\Users\\Administrator\\Desktop\\CTMNavigation\\tmp\\ctm_identity_v13_20261023\\CTWMR2I\\docs\\GPU_RUNTIME.md",
+      "target": "C:\\Users\\Administrator\\Desktop\\CTWMR2I\\docs\\GPU_RUNTIME.md",
+      "before_sha256": "6015d20a99e5b3683b75a7bfca1caf6d3ce809e7326add7fddcf5e1ddbf7775d",
+      "after_sha256": "b726c3a1d9ce8db9a3ccd437120ccd66055d97398c5fe102a5aa42e589deda53"
+    },
+    {
+      "staged": "C:\\Users\\Administrator\\Desktop\\CTMNavigation\\tmp\\ctm_identity_v13_20261023\\CTWMR2I\\docs\\MEMORY_AND_REWARD_REVIEW.md",
+      "target": "C:\\Users\\Administrator\\Desktop\\CTWMR2I\\docs\\MEMORY_AND_REWARD_REVIEW.md",
+      "before_sha256": null,
+      "after_sha256": "b8fd8c80bcd1527892cb15e0de54fa64726321ee6c7949494e6f29353b40720d"
+    },
+    {
+      "staged": "C:\\Users\\Administrator\\Desktop\\CTMNavigation\\tmp\\ctm_identity_v13_20261023\\CTWMR2I\\docs\\METHOD.md",
+      "target": "C:\\Users\\Administrator\\Desktop\\CTWMR2I\\docs\\METHOD.md",
+      "before_sha256": "11db10ef7439e12895f7ec2b6912eae4b8c2cf35059b95207fe9fb94ae44837f",
+      "after_sha256": "11f8c275e13333979c40f9d7e4d5dffe70118ac3a112f0e471a028e2685007d7"
+    },
+    {
+      "staged": "C:\\Users\\Administrator\\Desktop\\CTMNavigation\\tmp\\ctm_identity_v13_20261023\\CTWMR2I\\docs\\validation\\identity_retention_20261023\\tests.log",
+      "target": "C:\\Users\\Administrator\\Desktop\\CTWMR2I\\docs\\validation\\identity_retention_20261023\\tests.log",
+      "before_sha256": null,
+      "after_sha256": "431bbbfec9e4c6b07cccb85afa8a2893a42bfc4a5fe97d8db56f6fa79a3d5378"
+    },
+    {
+      "staged": "C:\\Users\\Administrator\\Desktop\\CTMNavigation\\tmp\\ctm_identity_v13_20261023\\CTWMR2I\\docs\\validation\\identity_retention_20261023\\validation.json",
+      "target": "C:\\Users\\Administrator\\Desktop\\CTWMR2I\\docs\\validation\\identity_retention_20261023\\validation.json",
+      "before_sha256": null,
+      "after_sha256": "5d101464bbd9a24e00f339ff5ceacca429f21efe70523a6b344087ba5a3a44fd"
+    },
+    {
+      "staged": "C:\\Users\\Administrator\\Desktop\\CTMNavigation\\tmp\\ctm_identity_v13_20261023\\CTWMR2I\\docs\\VALIDATION.md",
+      "target": "C:\\Users\\Administrator\\Desktop\\CTWMR2I\\docs\\VALIDATION.md",
+      "before_sha256": "ae2dc36eb25aa8f2b14ae4b2c0e6dcad710fcc37171ca1876f59de607636f64e",
+      "after_sha256": "b17ed7c5a28f922acf07337ad680ec1f9f841b38cae10fe9abae3fde56948654"
+    },
+    {
+      "staged": "C:\\Users\\Administrator\\Desktop\\CTMNavigation\\tmp\\ctm_identity_v13_20261023\\CTWMR2I\\README.md",
+      "target": "C:\\Users\\Administrator\\Desktop\\CTWMR2I\\README.md",
+      "before_sha256": "501f839436cfe31765af6a3833cd0598ebf0a44780b271f05e5c0dd6ea63b982",
+      "after_sha256": "340d24890794dc9948c0a1e86eff8ebd1b7dddaec858f42970657f66ec16b10a"
+    },
+    {
+      "staged": "C:\\Users\\Administrator\\Desktop\\CTMNavigation\\tmp\\ctm_identity_v13_20261023\\CTWMR2I\\recall2imagine\\jaxagent.py",
+      "target": "C:\\Users\\Administrator\\Desktop\\CTWMR2I\\recall2imagine\\jaxagent.py",
+      "before_sha256": "1742d6bf458fc1185327a0fbe2dae2dcc5295a1a01185f66a86be237c00c64fc",
+      "after_sha256": "6281690059613f885070b7448a6d54207c7f9c525e7e169b1d4433a018f9eff4"
+    },
+    {
+      "staged": "C:\\Users\\Administrator\\Desktop\\CTMNavigation\\tmp\\ctm_identity_v13_20261023\\CTWMR2I\\recall2imagine\\nrsm_nets.py",
+      "target": "C:\\Users\\Administrator\\Desktop\\CTWMR2I\\recall2imagine\\nrsm_nets.py",
+      "before_sha256": "b8648381d76a0ba7d8872dced344e49ad830b4fbf958a37fe4b7168cc9fe092e",
+      "after_sha256": "2b41f76c2d1afa1ca2d63127fc6ea5d57c46613f354c8f0f12e3f1a58a80674e"
+    },
+    {
+      "staged": "C:\\Users\\Administrator\\Desktop\\CTMNavigation\\tmp\\ctm_identity_v13_20261023\\CTWMR2I\\tests\\test_nrsm.py",
+      "target": "C:\\Users\\Administrator\\Desktop\\CTWMR2I\\tests\\test_nrsm.py",
+      "before_sha256": "38715adf0fae5aa90f6b83d1d78e42c56b96964762d2c3c43f7f2385d1443195",
+      "after_sha256": "b0d45abfc4b685dc627845d4322c4b5eac221d4fc52aec0a9cd8dca5235c7066"
+    },
+    {
+      "staged": "C:\\Users\\Administrator\\Desktop\\CTMNavigation\\tmp\\ctm_identity_v13_20261023\\CTWMR2I\\tests\\test_runtime.py",
+      "target": "C:\\Users\\Administrator\\Desktop\\CTWMR2I\\tests\\test_runtime.py",
+      "before_sha256": "a73b3d0934a13d5330d815e5285f3283f81fcdeb2c7274ca873f3fd3c0cb219e",
+      "after_sha256": "7837e1d0924ef4e68272764d856a3119a6c194bf7807417d564416074f3122be"
+    },
+    {
+      "staged": "C:\\Users\\Administrator\\Desktop\\CTMNavigation\\tmp\\ctm_identity_v13_20261023\\paper\\formula_inventory.json",
+      "target": "C:\\Users\\Administrator\\Desktop\\CT_WM__A_Continuous_Thought_World_Model_for_Long_Distance_Sparse_Rewards_Autonomous_UAV_Navigation\\formula_inventory.json",
+      "before_sha256": "bdd893f68667db1976c014ccd73039ec3f78b5498cec4f5a2da1fbe2b8b3a642",
+      "after_sha256": "497e9286c6b45a88b816069223863a0137fc15a71caf707dcae6e76566443a17"
+    },
+    {
+      "staged": "C:\\Users\\Administrator\\Desktop\\CTMNavigation\\tmp\\ctm_identity_v13_20261023\\paper\\FORMULA_REPRODUCTION_CHECKLIST.md",
+      "target": "C:\\Users\\Administrator\\Desktop\\CT_WM__A_Continuous_Thought_World_Model_for_Long_Distance_Sparse_Rewards_Autonomous_UAV_Navigation\\FORMULA_REPRODUCTION_CHECKLIST.md",
+      "before_sha256": "f2ba9706ce3ea53a634833059dbd0793c667ca35382f7d17a970dadf97ece445",
+      "after_sha256": "d18ab41ba3e9440b85805e663a165b16c2b758450bdd97d504b3e9a38b55842e"
+    },
+    {
+      "staged": "C:\\Users\\Administrator\\Desktop\\CTMNavigation\\tmp\\ctm_identity_v13_20261023\\paper\\ijcai26.bib",
+      "target": "C:\\Users\\Administrator\\Desktop\\CT_WM__A_Continuous_Thought_World_Model_for_Long_Distance_Sparse_Rewards_Autonomous_UAV_Navigation\\ijcai26.bib",
+      "before_sha256": "828bffe83a89902d1b97bee785c31fb666fa3a0c6fd0c8feec70153c380253f8",
+      "after_sha256": "f04802a4232b63b6714c163d08a871853a5f618dc6cab9e21f9ea830ff2d1170"
+    },
+    {
+      "staged": "C:\\Users\\Administrator\\Desktop\\CTMNavigation\\tmp\\ctm_identity_v13_20261023\\paper\\ijcai26.tex",
+      "target": "C:\\Users\\Administrator\\Desktop\\CT_WM__A_Continuous_Thought_World_Model_for_Long_Distance_Sparse_Rewards_Autonomous_UAV_Navigation\\ijcai26.tex",
+      "before_sha256": "6694ed11434196b00b2088e1daba825424ab4811d7780183818a9125d03ae6fb",
+      "after_sha256": "782100d85ed0a7448a890961d6fcb34fef37f495c05c1a923f96ef8bfef460b4"
+    },
+    {
+      "staged": "C:\\Users\\Administrator\\Desktop\\CTMNavigation\\tmp\\ctm_identity_v13_20261023\\paper\\REVISION_NOTES.md",
+      "target": "C:\\Users\\Administrator\\Desktop\\CT_WM__A_Continuous_Thought_World_Model_for_Long_Distance_Sparse_Rewards_Autonomous_UAV_Navigation\\REVISION_NOTES.md",
+      "before_sha256": "50e2b4106a37bae181094baebc76f867005fc74b78cc7ea3c5681f227eb3ac25",
+      "after_sha256": "b68900adbc02f0b3d66ddb92d8f47dfaa1b6960b0a5a925f1668f6e03335878c"
+    }
+  ],
+  "live_training": "No process, output, replay or checkpoint was modified."
+}
