@@ -48,8 +48,8 @@ deter = concat(activity, tanh_projection(concat(activity, sync)))
 `post_trace[..., -1]`，没有新增递归记忆张量。递归活动本身不做 LayerNorm；
 LayerNorm 仍位于现有 synapse 内。每个新回合恢复零神经历史。
 新更新不是凸插值，活动不再限制于 [-1,1]；默认参数的保守前向幅度界约 10.05。
-`deter` 的前 64 维原样复制当前活动，后 64 维为活动与同步的 tanh 投影。
-同步从全部 64 个神经元中固定等距选择 16 个（含两端），形成 136 个上三角配对，
+默认 tiny/small 配置下，`deter` 的前 64 维原样复制当前活动，后 64 维为活动与同步的 tanh 投影。
+该默认配置的同步从全部 64 个神经元中固定等距选择 16 个（含两端），形成 136 个上三角配对，
 覆盖初始快慢尺度；不随训练中的时间常数动态排序。保持 `deter > neurons`。
 观测仍只进入 `q(z|deter,encoder(observation))`，下一转移通过 z 影响神经动态。
 真实过滤和 imagination 使用同一 `_transition`。
@@ -122,9 +122,39 @@ python -u CTWM.py --configs small ctwm \
 ```
 
 B32/T1024、1M 总预算、seed0 和原生稀疏奖励沿用当前实验。`small` 调整共享网络容量，
-CTM 大小由 `ctwm` 配置控制。`memory_len/100` 的 100 是原生记忆长度：每回合有
+CTM 神经元和同步读出大小由规模预设控制，见下表。`memory_len/100` 的 100 是原生记忆长度：每回合有
 101 次动作交互，连同 reset 共 102 条记录；终端总进度按记录数计数。
 首次执行需要图编译，CPU 短测不能代替正式 GPU 吞吐或收敛测量。
+
+## CTM 神经元规模
+
+在本目录使用 `--configs medium popgym ctwm` 或 `--configs large popgym ctwm`
+即可选择更大的 CTM。`ctwm` 放在后面仍会保留所选神经元规模。
+
+| 规模 | 神经元 | deter | 活动/同步投影宽度 | 同步采样神经元 | 同步配对特征 |
+|---|---:|---:|---:|---:|---:|
+| tiny | 64 | 128 | 64 | 16 | 136 |
+| small | 64 | 128 | 64 | 16 | 136 |
+| medium | 128 | 192 | 64 | 32 | 528 |
+| large | 256 | 320 | 64 | 64 | 2080 |
+
+tiny/small 的有效配置保持原样。medium/large 只增加 CTM 的神经元数、
+直通活动维度和同步采样规模；每个神经元的历史窗口仍为 8 ticks，私有 NLM
+隐藏宽度仍为 8，每环境步仍执行 4 ticks，随机 latent 仍为 8×8。
+神经递推、门控、时间常数范围、奖励头结构、loss 和训练超参数沿用原实现。
+pre/post trace 的形状自动变为 `[B, neurons, 8]`，`deter` 始终是
+`neurons` 维原始活动加 64 维活动/同步投影。
+
+共享 encoder/decoder/actor/critic 等仍遵循原有预设覆盖顺序：例如
+`medium popgym ctwm` 中，POPGym 会覆盖共享网络的层数和宽度；本次不改变此规则。
+配置优先级仍为 defaults → 从左到右的 presets → CLI；显式
+`--nrsm.neurons`、`--nrsm.deter`、`--nrsm.sync_neurons` 最后生效，
+并须满足 `deter > neurons`、`sync_neurons <= neurons`。
+小规模检查继续使用 `--configs ctwm ctwm_smoke`。
+
+切换规模需使用新的 `--logdir` 从头训练，不能直接恢复另一规模的 checkpoint/replay。
+同步配对数随采样神经元数近似平方增长，因此 large 的显存和速度需单独实测。
+本次配置更新不会启动训练或修改已有实验。
 
 ## 默认 CTM 配置
 

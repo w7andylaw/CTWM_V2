@@ -151,7 +151,9 @@ ctwm:
   ssm_type: nrsm
   jax.precision: float32
   rssm.unroll: False
-  nrsm: {deter: 128, neurons: 64, memory: 8, ticks: 4, stoch: 8, classes: 8, units: 128, nlm_hidden: 8, sync_neurons: 16, unimix: 0.01, action_clip: 1.0, tick_mode: adaptive, alpha_error: 1.0, alpha_cert: 1.0, sequence_unroll: False, time_constant_min: 0.1, time_constant_max: 100.0, write_scale: 0.1}
+  # Inherit neuron/readout sizes from defaults or the selected size preset.
+  # Do not reset them when ctwm follows medium/large in --configs.
+  nrsm: {memory: 8, ticks: 4, stoch: 8, classes: 8, units: 128, nlm_hidden: 8, unimix: 0.01, action_clip: 1.0, tick_mode: adaptive, alpha_error: 1.0, alpha_cert: 1.0, sequence_unroll: False, time_constant_min: 0.1, time_constant_max: 100.0, write_scale: 0.1}
   # Resolve again after task overrides: no SSM hidden or raw-action bypass.
   reward_head.inputs: [deter, stoch]
   actor.inputs: [deter, stoch]
@@ -279,6 +281,9 @@ popgym:
   decoder: {mlp_keys: 'observation', cnn_keys: '$^'}
 
 tiny:
+  nrsm.neurons: 64
+  nrsm.deter: 128
+  nrsm.sync_neurons: 16
   rssm.deter: 200
   .*\.cnn_depth: 32
   .*\.units: 200
@@ -287,6 +292,9 @@ tiny:
   .*\.layers: 2
 
 small:
+  nrsm.neurons: 64
+  nrsm.deter: 128
+  nrsm.sync_neurons: 16
   rssm.deter: 512
   .*\.cnn_depth: 32
   .*\.units: 512
@@ -295,6 +303,9 @@ small:
   .*\.layers: 2
 
 medium:
+  nrsm.neurons: 128
+  nrsm.deter: 192
+  nrsm.sync_neurons: 32
   rssm.deter: 1024
   .*\.cnn_depth: 48
   .*\.units: 640
@@ -303,6 +314,9 @@ medium:
   .*\.layers: 3
 
 large:
+  nrsm.neurons: 256
+  nrsm.deter: 320
+  nrsm.sync_neurons: 64
   rssm.deter: 2048
   .*\.cnn_depth: 64
   .*\.units: 768
