@@ -2,10 +2,11 @@ import re
 
 import embodied
 import numpy as np
+from tqdm.auto import tqdm
 
 
 def train_eval(
-    agent, train_env, eval_env, train_replay, eval_replay, logger, args):
+    agent, train_env, eval_env, train_replay, eval_replay, logger, args, config):
 
   logdir = embodied.Path(args.logdir)
   logdir.mkdirs()
@@ -19,6 +20,9 @@ def train_eval(
   step = logger.step
   updates = embodied.Counter()
   metrics = embodied.Metrics()
+  action_budget = config.task.startswith('atari_')
+  eval_scores = []
+  last_eval_step = None
   print('Observation space:', embodied.format(train_env.obs_space), sep='\n')
   print('Action space:', embodied.format(train_env.act_space), sep='\n')
 
@@ -32,6 +36,8 @@ def train_eval(
   def per_episode(ep, mode):
     length = len(ep['reward']) - 1
     score = float(ep['reward'].astype(np.float64).sum())
+    if mode == 'eval':
+      eval_scores.append(score)
     logger.add({
         'length': length, 'score': score,
         'reward_rate': (ep['reward'] - ep['reward'].min() >= 0.1).mean(),
@@ -55,13 +61,17 @@ def train_eval(
 
   driver_train = embodied.Driver(train_env)
   driver_train.on_episode(lambda ep, worker: per_episode(ep, mode='train'))
-  driver_train.on_step(lambda tran, _: step.increment())
+  # Atari100k counts agent actions, including prefill, but not reset records.
+  driver_train.on_step(lambda tran, _: step.increment()
+                       if not action_budget or not tran['is_first'] else None)
   driver_train.on_step(train_replay.add)
   driver_eval = embodied.Driver(eval_env)
   driver_eval.on_step(eval_replay.add)
   driver_eval.on_episode(lambda ep, worker: per_episode(ep, mode='eval'))
 
-  random_agent = embodied.RandomAgent(train_env.act_space)
+  train_replay.set_agent(agent)
+  train_replay.maybe_restore()
+  random_agent = embodied.RandomAgent(train_env.act_space, seed=config.seed)
   print('Prefill train dataset.')
   while len(train_replay) < max(args.batch_steps, args.train_fill):
     driver_train(random_agent.policy, steps=100)
@@ -71,11 +81,16 @@ def train_eval(
   logger.add(metrics.result())
   logger.write()
 
-  dataset_train = agent.dataset(train_replay.dataset)
-  dataset_eval = agent.dataset(eval_replay.dataset)
+  if config.replay == 'lfs':
+    dataset_train = agent.dataset(train_replay, shared_memory=True)
+  else:
+    dataset_train = agent.dataset(train_replay.dataset, shared_memory=False)
+  dataset_eval = agent.dataset(eval_replay.dataset, shared_memory=False)
   state = [None]  # To be writable from train step function below.
   batch = [None]
   def train_step(tran, worker):
+    if action_budget and tran['is_first']:
+      return
     for _ in range(should_train(step)):
       with timer.scope('dataset_train'):
         batch[0] = next(dataset_train)
@@ -98,27 +113,51 @@ def train_eval(
       logger.write(fps=True)
   driver_train.on_step(train_step)
 
-  checkpoint = embodied.Checkpoint(logdir / 'checkpoint.ckpt')
+  checkpoint = embodied.Checkpoint(logdir / 'checkpoint.ckpt', parallel=False)
   checkpoint.step = step
   checkpoint.agent = agent
   checkpoint.train_replay = train_replay
   checkpoint.eval_replay = eval_replay
+  restore_keys = ['train_replay', 'eval_replay', 'agent', 'step']
   if args.from_checkpoint:
-    checkpoint.load(args.from_checkpoint)
-  checkpoint.load_or_save()
+    checkpoint.load(args.from_checkpoint, keys=restore_keys)
+  checkpoint.load_or_save(keys=restore_keys)
+  if hasattr(agent, '_updates'):
+    updates.load(int(agent._updates))
   should_save(step)  # Register that we jused saved.
 
   print('Start training loop.')
   policy_train = lambda *args: agent.policy(
       *args, mode='explore' if should_expl(step) else 'train')
   policy_eval = lambda *args: agent.policy(*args, mode='eval')
-  while step < args.steps:
-    if should_eval(step):
-      print('Starting evaluation at step', int(step))
-      driver_eval.reset()
-      driver_eval(policy_eval, episodes=max(len(eval_env), args.eval_eps))
-    driver_train(policy_train, steps=100)
-    if should_save(step):
-      checkpoint.save()
-  logger.write()
+  def evaluate():
+    nonlocal last_eval_step
+    agent.sync()
+    eval_scores.clear()
+    print('Starting evaluation at step', int(step))
+    driver_eval.reset()
+    driver_eval(policy_eval, episodes=max(len(eval_env), args.eval_eps))
+    logger.add({'score_mean': float(np.mean(eval_scores)),
+                'score_std': float(np.std(eval_scores)),
+                'episodes': len(eval_scores)}, prefix='eval')
+    logger.write()
+    last_eval_step = int(step)
+
+  with tqdm(total=int(args.steps), initial=int(step), desc='CT-WM Atari' if action_budget else 'CT-WM',
+            unit='actions' if action_budget else 'records') as progress:
+    while step < args.steps:
+      if should_eval(step):
+        evaluate()
+      before = int(step)
+      driver_train(policy_train, steps=min(100, int(args.steps) - before))
+      progress.update(int(step) - before)
+      progress.set_postfix(updates=int(updates), replay=len(train_replay), refresh=False)
+      if should_save(step):
+        checkpoint.save()
+  # Save the exact training endpoint even when no wall-clock save is due.
+  checkpoint.save()
+  logger.add(metrics.result())
+  logger.add({'updates': int(updates)}, prefix='run')
+  if last_eval_step != int(step):
+    evaluate()
   logger.write()

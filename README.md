@@ -1,195 +1,92 @@
-# CT-WM v13 on the Recall2Imagine framework
+# YiNorn：实验配置与基线
 
-当前版本为 `ctm-identity-gated-retention-v13`。CTM 自己保存跨环境步神经历史，
-并在每次状态转移内进行多 tick 计算；已移除独立 SSM、`ltm`、memory backbone
-及读取 SSM 的预测和策略旁路。训练框架、原生任务、回放、奖励定义、基础预测损失、
-balanced/free-nats KL、symlog 奖励/价值分布和 Actor-Critic 沿用当前 R2I 接入。
+本页统一列出本项目采用的实验配置。Memory Length 使用指定的统一配置；POPGym 的训练参数与核心规模采用朋友的 RepeatPrevious 配置，显式历史窗口按任务所需跨度设置；Atari 100k 使用当前 large 配置。
 
-## 版本与目录
+## 训练参数
 
-本目录是 **v13 主项目**，不是 v12 备份。模型版本标记为
-`ctm-identity-gated-retention-v13`，v13 模型基准提交为 `8355263`。
+以下预算均为每个 seed 的预算，全部使用 **float32**。
 
-| 用途 | Windows 路径 |
+| 实验 | 训练预算 | batch × length | train_ratio | 回放容量 | 环境数 |
+|---|---|---|---|---|---|
+| Memory Length（所有长度） | 100万条交互记录 | **32 × 1024** | **1024** | LFS 1000万 | 1 |
+| POPGym（含 RepeatPrevious） | **5000万条交互记录** | **16 × 1024** | **64** | LFS 1000万 | 8，process |
+| Atari 100k（当前 Pong） | 10万次动作决策 | **16 × 64** | **1024** | LFS 100万 | 1 |
+
+同一任务中的 YiNorn 与基线共用上表的训练预算、batch、序列长度、train_ratio、回放容量与精度。POPGym 使用 seed 0、1、2；Atari 当前使用 seed 0；Memory Length 的 seed 由运行命令指定。
+
+## 模型大小与输入
+
+| 实验 | 模型 | 递归核心 | deter（D） | 随机潜变量（Z） | 显式历史覆盖（环境步） | Actor / Critic 输入 |
+|---|---|---|---|---|---|---|
+| Memory Length | YiNorn | **64 神经元** | **128** | **8×8** | 约2步（memory8，ticks4） | deter + z |
+| Memory Length | R2I | 3层 SSM，每层 hidden512、units1024 | 512 | 32×32 | — | deter + z |
+| Memory Length | DreamerV3式 GRU 基线 | GRU512、RSSM units512 | 512 | 32×32 | — | deter + z |
+| POPGym | YiNorn | **64 神经元** | **128** | **8×8** | **按任务所需历史步数覆盖**；RepeatPrevious Medium为约32步（memory64，ticks2） | pre_trace + post_trace + z |
+| POPGym | R2I | 3层 SSM，每层 hidden512、units1024 | 512 | 32×32 | — | SSM hidden + z |
+| POPGym | DreamerV3式 GRU 基线 | GRU1024、RSSM units1024 | 1024 | 32×32 | — | deter + z |
+| Atari 100k | **YiNorn large** | **256 神经元** | **512** | **32×32** | 约2步（memory8，ticks4） | deter + z |
+| Atari 100k | DreamerV3式 GRU 基线 | GRU512、RSSM units512 | 512 | 32×32 | — | deter + z |
+
+`Z=8×8` 表示8个分类变量、每个8类，展平后64维。`memory` 是神经活动的 tick 历史长度，显式窗口约为 `memory / ticks` 个环境步，不是递推记忆的最长持续时间。POPGym 按任务需要保留的历史跨度设置窗口：`nrsm.memory = 所需环境步数 × 每步ticks`；每步2 ticks时，RepeatPrevious Medium的32步跨度对应memory64。
+
+| 网络参数 | Memory Length | POPGym | Atari 100k |
+|---|---|---|---|
+| Encoder / Decoder | 三种模型均为 MLP 2×512 | YiNorn/R2I：MLP 2×512；GRU：MLP 5×1024 | CNN depth32，MLP 2×512 |
+| Actor / Critic / reward 隐藏层 | 2×512 | 2×512 | 2×512 |
+| YiNorn 先验/后验宽度 | 128 | 128 | 512 |
+| YiNorn NLM 隐藏宽度 | 8 | 8 | 8 |
+| YiNorn 同步采样神经元 | 16 | 16 | 64 |
+
+当前 Pong 的可训练参数量：YiNorn large **18,149,800**，GRU 基线 **17,922,952**，不计优化器状态和慢速 Critic 副本。
+
+## DreamerV3 基线：各实验参数
+
+以下为本项目共享训练框架中的 **DreamerV3式 GRU-RSSM 基线**。每项实验与YiNorn使用相同的交互预算、batch、序列长度、train_ratio及float32精度。
+
+| 参数 | Memory Length（所有长度） | POPGym（所有任务） | Atari 100k（当前 Pong） |
+|---|---|---|---|
+| 每seed训练预算 | 100万条记录 | 5000万条记录 | 10万次动作决策 |
+| seed | 运行命令指定，示例0 | 0、1、2 | 0 |
+| batch × length | **32×1024** | **16×1024** | **16×64** |
+| train_ratio | **1024** | **64** | **1024** |
+| 回放 | LFS 1000万 | LFS 1000万 | LFS 100万 |
+| 环境数 / 并行方式 | 1 / none | 8 / process | 1 / none |
+| train_fill / 有效预采集阈值 | 32768 / 32768 | 0 / 131072 | 1024 / 1024 |
+| GRU隐藏状态 / deter | **512** | **1024** | **512** |
+| RSSM中间层宽度 units | 512 | 1024 | 512 |
+| 随机潜变量 z | 32×32 | 32×32 | 32×32 |
+| Encoder / Decoder | MLP 2×512 | MLP 5×1024 | CNN depth32，MLP 2×512 |
+| Actor / Critic / reward / continuation隐藏层 | 2×512 | 2×512 | 2×512 |
+| Actor / Critic及预测头输入 | deter + z | deter + z | deter + z |
+| 后验 | q(z\|deter, observation) | q(z\|deter, observation) | q(z\|deter, observation) |
+| 奖励头 | 普通MLP | 普通MLP | 普通MLP |
+| 精度 / 想象长度 | float32 / 15 | float32 / 15 | float32 / 15 |
+| 运行方式 | train，训练回报 | train，训练回报 | train_eval，结束后100回合评估 |
+
+三项基线均设置 `ssm_type=gru`、`rssm.nonrecurrent_enc=False`、`rssm.unroll=False`；没有YiNorn的nrsm.memory或多tick参数。优化器、KL、熵正则与折扣使用下节共用设置。
+
+Memory Length的GRU512核心参考[DreamerV3 2023 BSuite预设](https://github.com/danijar/dreamerv3/blob/84ecf191d967f787f5cc36298e69974854b0df9c/dreamerv3/configs.yaml)，Encoder/Decoder固定为本项目统一的2×512。POPGym沿用GRU1024和5×1024 Encoder/Decoder的对比配置；Atari沿用现有启动脚本。
+
+## 共用优化设置
+
+| 参数 | 值 |
 |---|---|
-| v13 代码与训练入口 | `C:\Users\Administrator\Desktop\CTWMR2I` |
-| 独立 v12 备份 | `C:\Users\Administrator\Desktop\CTWM` |
-| 本次 v13 Memory Length 100 实验 | `CTWMR2I\outputs\memory_len100_v13_seed0_fresh002` |
+| 世界模型 Adam | lr `1e-4`，eps `1e-8`，clip1000，wd0 |
+| Actor / Critic Adam | lr `3e-5`，eps `1e-5`，clip100，wd0 |
+| loss 权重 | 观测/奖励/continuation 各1；dyn KL0.5、rep KL0.1；free nats1 |
+| 想象与回报 | 想象长度15，horizon333（γ≈0.997），λ0.95 |
+| 策略 | 离散 REINFORCE，unimix0.01，熵权重 `3e-4` |
+| Critic | 255-bin symlog 分布，slow 更新比例0.02 |
+| YiNorn | tick KL权重0；动作条件奖励首层；无历史花色监督loss |
 
-WSL 项目路径是 `/mnt/c/Users/Administrator/Desktop/CTWMR2I`。
-两个版本独立维护，不应把 v12 的备份文件合并回本目录。
-`outputs/` 中可能保留历史版本的实验；目录名不能替代 checkpoint 内的架构标记。
+## 运行与结果
 
-## 当前机制
+- **Memory Length：** 在本项目运行，见 [运行命令](docs/EXPERIMENT_RUN_COMMANDS.md)。所有长度保持 B32/L1024、train_ratio1024。
+- **POPGym：** 在独立的 `CTWM_V2_PopGym` 项目运行，见 [POPGym README](../CTWM_V2_PopGym/README.md) 和 [运行命令](../CTWM_V2_PopGym/docs/EXPERIMENT_RUN_COMMANDS.md)。POPGym 沿用 B16/L1024、train_ratio64、N64/D128/Z8×8、每步2 ticks；memory按任务所需历史步数设置，RepeatPrevious Medium为64。
+- **Atari：** YiNorn 使用 [large 启动脚本](scripts/run_atari100k_pong_large.sh)，Dreamer 使用 [GRU 启动脚本](scripts/run_atari100k_pong_dreamerv3.sh)。Pong 观测为64×64 RGB，动作重复4、最小动作集合、sticky关闭、NOOP上限30；10万次动作结束后独立评估100回合。
 
-每个 tick 用现有 GLU/LayerNorm synapse 和私有 NLM 的共享隐藏层，分别计算候选活动和独立写门：
+有效预采集阈值：Memory Length 为32768条，POPGym 为131072条，Atari 为1024条。Memory Length/POPGym 的 `scores.jsonl` 记录训练回报；Atari 另有独立评估。最终生效参数保存在每次运行的 `config.yaml`，loss 在 `metrics.jsonl`。
 
-```text
-candidate, write_gate = PrivateNLM(pre_trace)
-rho_i = exp(-1 / (K * T_i))
-kappa_i = expm1(-1 / (K * T_i)) / expm1(-1 / T_i)
-activity = activity + write_gate * ((rho - 1) * activity + write_scale * kappa * candidate)
-post_trace = append(post_trace, activity)
-sync = synchronization(post_trace, fixed_spread_neuron_pairs)
-deter = concat(activity, tanh_projection(concat(activity, sync)))
-```
+表中的 R2I 与 GRU 参数是本项目的对比配置；GRU 基线运行在共享训练框架内。方法参考：[R2I](https://arxiv.org/html/2403.04253v1)、[DreamerV3 2023配置](https://github.com/danijar/dreamerv3/blob/84ecf191d967f787f5cc36298e69974854b0df9c/dreamerv3/configs.yaml)。
 
-`T_i` 是每个神经元可学习的时间常数，单位为环境步。正时间常数采用有界 log-space
-参数化，默认范围 0.1–100，初始化在 log-space 中从范围的 1% 到 99% 等距分布。
-当神经元只有一个时使用中点。门完全打开时，K 次更新的直接旧活动系数为 `exp(-1/T_i)`；一般为 `product(1-g_tick*(1-rho))`。
-候选活动仍依赖非线性反馈，因此这不是线性 SSM 的整体稳定性或长期记忆保证。
-独立写门是输入相关的 sigmoid 输出，门输出权重和偏置初始化为零，初始值 0.5。
-`write_scale=.1` 和 kappa 保持原值。门为0时活动不变，门为1时恢复原先完全开门的更新；
-历史窗口与同步仍继续更新。常量门和候选的总写入为
-`write_scale*kappa*g*candidate*sum((1-g*(1-rho))**j, j=0..K-1)`，
-一般依赖门、T和K；不再宣称任意门下写入预算不变。选择性保持仍需学习。
-
-跨环境步传递 `pre_trace`、`post_trace` 和派生读出 `deter`，当前活动直接取
-`post_trace[..., -1]`，没有新增递归记忆张量。递归活动本身不做 LayerNorm；
-LayerNorm 仍位于现有 synapse 内。每个新回合恢复零神经历史。
-新更新不是凸插值，活动不再限制于 [-1,1]；默认参数的保守前向幅度界约 10.05。
-默认 tiny/small 配置下，`deter` 的前 64 维原样复制当前活动，后 64 维为活动与同步的 tanh 投影。
-该默认配置的同步从全部 64 个神经元中固定等距选择 16 个（含两端），形成 136 个上三角配对，
-覆盖初始快慢尺度；不随训练中的时间常数动态排序。保持 `deter > neurons`。
-观测仍只进入 `q(z|deter,encoder(observation))`，下一转移通过 z 影响神经动态。
-真实过滤和 imagination 使用同一 `_transition`。
-
-decoder、continuation、actor 和 critic 继续读取 `[deter,stoch]`。
-reward 保留相同状态特征，并用产生当前奖励的 incoming action 调节第一层对原始活动的映射：
-
-```text
-deter = concat(activity, projected)
-reward_h0 = existing_activation_and_norm(
-    shared_kernel @ concat(projected, flatten(stoch))
-    + sum_k incoming_action[k] * action_kernel[k] @ activity)
-```
-
-离散 one-hot 动作使用加权求和，不使用 argmax；后续奖励隐藏层、255-bin 输出与 NLL 不变。
-连续动作使用 `[1, flatten(action)]` 的仿射条件权重，零动作仍保留基础活动映射。
-没有额外隐藏层、记忆或监督标签。当前两动作、64活动、512隐藏宽度只多32768个权重。
-训练仍把 outgoing action 右移为 incoming action，reset 行清零；想象状态
-`state[t+1]` 对应 `action[t]` 产生的奖励。想象轨迹用临时 `reward_action` 保存这个对齐，
-它不加入递归状态；首个 dummy 奖励仍排除。255-bin symlog 分布及其 NLL 不变。
-没有新增辅助 loss、奖励重加权或额外记忆网络；tick scale 默认 0。
-
-定义见 [docs/METHOD.md](docs/METHOD.md)，逐式对应见
-[docs/FORMULA_ALIGNMENT.md](docs/FORMULA_ALIGNMENT.md)，验证见
-[docs/VALIDATION.md](docs/VALIDATION.md)。这是借鉴 SSM 时间尺度思想的 CTM 变体，
-不声称原版 CTM/S3M 的原样复现或已有收敛保证。
-
-## 代码结构
-
-```text
-CTWM.py                       统一训练入口
-recall2imagine/nrsm_nets.py    CTM 神经递推、NLM、同步读出和 tick 诊断
-recall2imagine/reward_nets.py  奖励头第一层的动作条件读出
-recall2imagine/agent.py        世界模型和 Actor-Critic
-recall2imagine/configs.yaml    上游预设、ctwm、ctwm_smoke
-recall2imagine/embodied/       环境、回放、日志和训练
-scripts/                      GPU 和任务接口检查
-tests/                        数值、集成和保存恢复测试
-docs/                         方法、公式、验证和任务说明
-```
-
-上游 GRU/S3M 的文件保留以支持框架中的其他模型，CTWM 的 `nrsm` 路径不调用它们。
-
-## RTX 5090 / WSL 运行
-
-v13 checkpoint 只支持同架构、同配置恢复，拒载 v12 及更早版本，即使参数形状相同。
-旧版本的 replay 也包含模型状态，不能只删除顶层 checkpoint 后复用。
-安装说明见 [docs/GPU_RUNTIME.md](docs/GPU_RUNTIME.md)。
-
-下面是本次 `memory_len/100`、seed 0 实验的完整命令，**只在当前训练已停止、需要恢复时执行**。
-同一输出目录只能由一个训练进程写入。已有 checkpoint 和 replay 会按训练入口的恢复逻辑加载。
-若要从零开始另一次实验，保留参数并把 `--logdir` 换成尚不存在的新目录；不要删除当前实验的数据。
-
-```bash
-cd /mnt/c/Users/Administrator/Desktop/CTWMR2I
-source /home/administrator/.venvs/ctwm-r2i-gpu/bin/activate
-unset LD_LIBRARY_PATH CUDA_ROOT CUDA_PATH JAX_PLATFORMS JAX_PLATFORM_NAME
-export CUDA_VISIBLE_DEVICES=0
-export XLA_PYTHON_CLIENT_PREALLOCATE=false
-export JAX_COMPILATION_CACHE_DIR="$PWD/outputs/.jax_cache"
-
-python scripts/gpu_check.py --require-gpu && \
-python -u CTWM.py --configs small ctwm \
-  --jax.platform gpu --jax.precision float32 --jax.prealloc False \
-  --task bsuite_memory_len/100 --envs.amount 1 --envs.parallel none \
-  --batch_size 32 --batch_length 1024 --replay_size 10000000 \
-  --imag_horizon 15 --run.train_ratio 1024 --nrsm_tick_scale 0 \
-  --seed 0 --run.steps 1000000 \
-  --logdir outputs/memory_len100_v13_seed0_fresh002
-```
-
-B32/T1024、1M 总预算、seed0 和原生稀疏奖励沿用当前实验。`small` 调整共享网络容量，
-CTM 神经元和同步读出大小由规模预设控制，见下表。`memory_len/100` 的 100 是原生记忆长度：每回合有
-101 次动作交互，连同 reset 共 102 条记录；终端总进度按记录数计数。
-首次执行需要图编译，CPU 短测不能代替正式 GPU 吞吐或收敛测量。
-
-## CTM 神经元规模
-
-在本目录使用 `--configs medium popgym ctwm` 或 `--configs large popgym ctwm`
-即可选择更大的 CTM。`ctwm` 放在后面仍会保留所选神经元规模。
-
-| 规模 | 神经元 | deter | 活动/同步投影宽度 | 同步采样神经元 | 同步配对特征 |
-|---|---:|---:|---:|---:|---:|
-| tiny | 64 | 128 | 64 | 16 | 136 |
-| small | 64 | 128 | 64 | 16 | 136 |
-| medium | 128 | 192 | 64 | 32 | 528 |
-| large | 256 | 320 | 64 | 64 | 2080 |
-
-tiny/small 的有效配置保持原样。medium/large 只增加 CTM 的神经元数、
-直通活动维度和同步采样规模；每个神经元的历史窗口仍为 8 ticks，私有 NLM
-隐藏宽度仍为 8，每环境步仍执行 4 ticks，随机 latent 仍为 8×8。
-神经递推、门控、时间常数范围、奖励头结构、loss 和训练超参数沿用原实现。
-pre/post trace 的形状自动变为 `[B, neurons, 8]`，`deter` 始终是
-`neurons` 维原始活动加 64 维活动/同步投影。
-
-共享 encoder/decoder/actor/critic 等仍遵循原有预设覆盖顺序：例如
-`medium popgym ctwm` 中，POPGym 会覆盖共享网络的层数和宽度；本次不改变此规则。
-配置优先级仍为 defaults → 从左到右的 presets → CLI；显式
-`--nrsm.neurons`、`--nrsm.deter`、`--nrsm.sync_neurons` 最后生效，
-并须满足 `deter > neurons`、`sync_neurons <= neurons`。
-小规模检查继续使用 `--configs ctwm ctwm_smoke`。
-
-切换规模需使用新的 `--logdir` 从头训练，不能直接恢复另一规模的 checkpoint/replay。
-同步配对数随采样神经元数近似平方增长，因此 large 的显存和速度需单独实测。
-本次配置更新不会启动训练或修改已有实验。
-
-## 默认 CTM 配置
-
-| 项目 | ctwm 默认值 |
-|---|---|
-| 数值精度 | float32，无混合精度 |
-| 神经动态 | 64 neurons，pre/post 各 8 ticks 历史，每环境步 4 ticks |
-| 神经元时间常数 | `time_constant_min=.1`、`time_constant_max=100`，单位环境步 |
-| Synapse | 两个 Linear → GLU → LayerNorm 块，输出 64 维 |
-| 私有 NLM | 每神经元独立，共享隐藏层输出 tanh 候选和 sigmoid 写门；门初值 0.5 |
-| 写入预算 | `write_scale=.1`；保留 expm1 系数，仅完全开门时校准 K 次写入 |
-| 同步 | 全部神经元间等距选 16 个、136 对；现有 learnable decay 及其公式保留 |
-| 确定性读出 | 原始活动 64 维直通＋活动/同步投影 64 维，合计 deter128 |
-| 随机 latent | 8×8 categoricals |
-| 预测/策略/价值状态输入 | `[deter,stoch]`，默认 192 维；奖励首层额外由 aligned incoming action 调节 |
-| 回放 | FIFO/LFS，10,000,000 条记录 |
-| 序列与想象 | 默认 batch4/length1024；正式命令 B32；H15 |
-| 基础 KL | dyn0.5、rep0.1，free threshold1；任务预设可覆盖 |
-| Tick KL | 默认 scale0，不加入训练目标 |
-
-`T_i` 属于模型参数，随 checkpoint 保存；它不是随回合变化的状态。
-在线神经历史和环境不保存到 checkpoint，因此恢复不能精确接续回合中的记忆。
-配置优先级为 defaults → presets → CLI，建议 `small`/任务预设在前、`ctwm` 在后。
-
-终端使用 tqdm，指标写入 metrics.jsonl，每回合原生回报写入 scores.jsonl。
-`run.log_every`、`run.save_every` 单位为秒。默认不上传 WandB。
-旧版验证只代表对应旧结构，当前通过项目以 docs/VALIDATION.md 为准。
-
-```bash
-python -m unittest discover -s tests -v
-python scripts/smoke_env.py --task bsuite_memory_len/4 bsuite_discounting_chain/10 \
-  --steps 256 --seed 0
-```
-
-模型测试应显式使用 CPU；GPU 环境检查用 `scripts/gpu_check.py --require-gpu`。
-TensorFlow 不是模型执行引擎。其他任务依赖与支持边界见
-[docs/TASK_SUPPORT.md](docs/TASK_SUPPORT.md)。保留上游 [LICENSE](LICENSE) 与
-[UPSTREAM_README.md](UPSTREAM_README.md)。
+方法与公式：[METHOD](docs/METHOD.md)、[FORMULA_ALIGNMENT](docs/FORMULA_ALIGNMENT.md)。GPU环境：[GPU_RUNTIME](docs/GPU_RUNTIME.md)。其他任务：[TASK_SUPPORT](docs/TASK_SUPPORT.md)。

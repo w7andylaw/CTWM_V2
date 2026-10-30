@@ -79,10 +79,11 @@ defaults:
   # learned time constants preserve activity on a range of environment scales.
   # All heads use deter + stoch; deter preserves raw activity then projects
   # activity/synchrony. The private NLM write gate is independent of retention.
+  # Default history: 32 ticks / 4 ticks per step = 8 environment steps.
   # Trace windows count thought ticks; decay is 4*sigmoid(sync_decay_raw),
   # initialized to 0.01. q(z|deter, embed) only corrects z.
   # No posterior memory correction or auxiliary NLL is used.
-  nrsm: {deter: 128, neurons: 64, memory: 8, ticks: 4, stoch: 8, classes: 8, units: 128, nlm_hidden: 8, sync_neurons: 16, unimix: 0.01, action_clip: 1.0, tick_mode: adaptive, alpha_error: 1.0, alpha_cert: 1.0, sequence_unroll: False, time_constant_min: 0.1, time_constant_max: 100.0, write_scale: 0.1}
+  nrsm: {deter: 128, neurons: 64, memory: 32, ticks: 4, stoch: 8, classes: 8, units: 128, nlm_hidden: 8, sync_neurons: 16, unimix: 0.01, action_clip: 1.0, tick_mode: adaptive, alpha_error: 1.0, alpha_cert: 1.0, sequence_unroll: False, time_constant_min: 0.1, time_constant_max: 100.0, write_scale: 0.1}
   # Keep tick diagnostics; use only the R2I base objective by default.
   nrsm_tick_scale: 0.0
   encoder: {mlp_keys: '.*', cnn_keys: '.*', act: silu, norm: layer, mlp_layers: 5, mlp_units: 1024, cnn: resnet, cnn_depth: 96, cnn_blocks: 0, resize: stride, winit: normal, fan: avg, symlog_inputs: True, minres: 4}
@@ -151,9 +152,10 @@ ctwm:
   ssm_type: nrsm
   jax.precision: float32
   rssm.unroll: False
-  # Inherit neuron/readout sizes from defaults or the selected size preset.
-  # Do not reset them when ctwm follows medium/large in --configs.
-  nrsm: {memory: 8, ticks: 4, stoch: 8, classes: 8, units: 128, nlm_hidden: 8, unimix: 0.01, action_clip: 1.0, tick_mode: adaptive, alpha_error: 1.0, alpha_cert: 1.0, sequence_unroll: False, time_constant_min: 0.1, time_constant_max: 100.0, write_scale: 0.1}
+  # Inherit all NRSM widths and history length from defaults / size presets.
+  # Shared-network width patterns below exclude nrsm.units, so ctwm can be last
+  # without resetting large's 32x32 stochastic state or 512-unit prior/posterior.
+  nrsm: {ticks: 4, nlm_hidden: 8, unimix: 0.01, action_clip: 1.0, tick_mode: adaptive, alpha_error: 1.0, alpha_cert: 1.0, sequence_unroll: False, time_constant_min: 0.1, time_constant_max: 100.0, write_scale: 0.1}
   # Resolve again after task overrides: no SSM hidden or raw-action bypass.
   reward_head.inputs: [deter, stoch]
   actor.inputs: [deter, stoch]
@@ -197,7 +199,7 @@ atari100k:
   rssm.deter: 512
   .*\.cnn_depth: 32
   .*\.layers: 2
-  .*\.units$: 512
+  (?!nrsm\.).*\.units$: 512
   encoder: {mlp_keys: '$^', cnn_keys: 'image'}
   decoder: {mlp_keys: '$^', cnn_keys: 'image'}
 
@@ -209,7 +211,7 @@ dmc_vision:
   rssm.deter: 512
   .*\.cnn_depth: 32
   .*\.layers: 2
-  .*\.units: 512
+  (?!nrsm\.).*\.units: 512
   encoder: {mlp_keys: '$^', cnn_keys: 'image'}
   decoder: {mlp_keys: '$^', cnn_keys: 'image'}
 
@@ -221,7 +223,7 @@ dmc_proprio:
   run.steps: 5e5
   .*\.cnn_depth: 32
   .*\.layers: 2
-  .*\.units: 512
+  (?!nrsm\.).*\.units: 512
   encoder: {mlp_keys: '.*', cnn_keys: '$^'}
   decoder: {mlp_keys: '.*', cnn_keys: '$^'}
 
@@ -276,58 +278,73 @@ popgym:
   rssm.units: 1024
   .*\.cnn_depth: 32
   .*\.layers: 2
-  .*\.units: 512
+  (?!nrsm\.).*\.units: 512
   encoder: {mlp_keys: 'observation', cnn_keys: '$^'}
   decoder: {mlp_keys: 'observation', cnn_keys: '$^'}
 
 tiny:
-  nrsm.neurons: 64
-  nrsm.deter: 128
-  nrsm.sync_neurons: 16
-  rssm.deter: 200
-  .*\.cnn_depth: 32
-  .*\.units: 200
-  .*\.mlp_units: 200
-  .*\.mlp_layers: 2
-  .*\.layers: 2
-
-small:
+  # Former small network, with the original 8-tick history.
+  nrsm.memory: 8
   nrsm.neurons: 64
   nrsm.deter: 128
   nrsm.sync_neurons: 16
   rssm.deter: 512
   .*\.cnn_depth: 32
-  .*\.units: 512
+  (?!nrsm\.).*\.units: 512
+  .*\.mlp_units: 512
+  .*\.mlp_layers: 2
+  .*\.layers: 2
+
+small:
+  # 128 thought ticks / 4 ticks per environment step = 32 steps.
+  nrsm.memory: 128
+  nrsm.neurons: 64
+  nrsm.deter: 128
+  nrsm.sync_neurons: 16
+  rssm.deter: 512
+  .*\.cnn_depth: 32
+  (?!nrsm\.).*\.units: 512
   .*\.mlp_units: 512
   .*\.mlp_layers: 2
   .*\.layers: 2
 
 medium:
-  nrsm.neurons: 128
-  nrsm.deter: 192
-  nrsm.sync_neurons: 32
+  # 256 thought ticks / 4 ticks per environment step = 64 steps.
+  nrsm.memory: 256
+  nrsm.neurons: 64
+  nrsm.deter: 128
+  nrsm.sync_neurons: 16
   rssm.deter: 1024
   .*\.cnn_depth: 48
-  .*\.units: 640
+  (?!nrsm\.).*\.units: 640
   .*\.mlp_units: 640
   .*\.mlp_layers: 3
   .*\.layers: 3
 
 large:
+  # Atari100k capacity comparison: 18,149,800 trainable parameters on RGB Pong
+  # with six actions, versus the current DreamerV3 baseline's 17,922,952.
+  # deter = 256 raw activity coordinates + 256 projected synchronization features.
+  nrsm.memory: 8
+  nrsm.ticks: 4
   nrsm.neurons: 256
-  nrsm.deter: 320
+  nrsm.deter: 512
   nrsm.sync_neurons: 64
-  rssm.deter: 2048
-  .*\.cnn_depth: 64
-  .*\.units: 768
-  .*\.mlp_units: 768
-  .*\.mlp_layers: 4
-  .*\.layers: 4
+  nrsm.stoch: 32
+  nrsm.classes: 32
+  nrsm.units: 512
+  nrsm.nlm_hidden: 8
+  rssm.deter: 512
+  .*\.cnn_depth: 32
+  (?!nrsm\.).*\.units: 512
+  .*\.mlp_units: 512
+  .*\.mlp_layers: 2
+  .*\.layers: 2
 
 xlarge:
   rssm.deter: 4096
   .*\.cnn_depth: 96
-  .*\.units: 1024
+  (?!nrsm\.).*\.units: 1024
   .*\.mlp_units: 1024
   .*\.mlp_layers: 5
   .*\.layers: 5
@@ -364,5 +381,5 @@ debug:
   rssm: {deter: 32, units: 16, stoch: 4, classes: 4}
   .*unroll: False
   .*\.layers: 2
-  .*\.units: 16
+  (?!nrsm\.).*\.units: 16
   .*\.wd$: 0.0

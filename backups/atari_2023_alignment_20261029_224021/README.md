@@ -1,0 +1,205 @@
+# CT-WM v13 on the Recall2Imagine framework
+
+当前版本为 `ctm-identity-gated-retention-v13`。CTM 自己保存跨环境步神经历史，
+并在每次状态转移内进行多 tick 计算；已移除独立 SSM、`ltm`、memory backbone
+及读取 SSM 的预测和策略旁路。训练框架、原生任务、回放、奖励定义、基础预测损失、
+balanced/free-nats KL、symlog 奖励/价值分布和 Actor-Critic 沿用当前 R2I 接入。
+
+## 版本与目录
+
+本目录是 **v13 主项目**，不是 v12 备份。模型版本标记为
+`ctm-identity-gated-retention-v13`，v13 模型基准提交为 `8355263`。
+
+| 用途 | Windows 路径 |
+|---|---|
+| v13 代码与训练入口 | `C:\Users\Administrator\Desktop\CTWMR2I` |
+| 独立 v12 备份 | `C:\Users\Administrator\Desktop\CTWM` |
+| 本次 v13 Memory Length 100 实验 | `CTWMR2I\outputs\memory_len100_v13_seed0_fresh002` |
+
+WSL 项目路径是 `/mnt/c/Users/Administrator/Desktop/CTWMR2I`。
+两个版本独立维护，不应把 v12 的备份文件合并回本目录。
+`outputs/` 中可能保留历史版本的实验；目录名不能替代 checkpoint 内的架构标记。
+
+## 当前机制
+
+每个 tick 用现有 GLU/LayerNorm synapse 和私有 NLM 的共享隐藏层，分别计算候选活动和独立写门：
+
+```text
+candidate, write_gate = PrivateNLM(pre_trace)
+rho_i = exp(-1 / (K * T_i))
+kappa_i = expm1(-1 / (K * T_i)) / expm1(-1 / T_i)
+activity = activity + write_gate * ((rho - 1) * activity + write_scale * kappa * candidate)
+post_trace = append(post_trace, activity)
+sync = synchronization(post_trace, fixed_spread_neuron_pairs)
+deter = concat(activity, tanh_projection(concat(activity, sync)))
+```
+
+`T_i` 是每个神经元可学习的时间常数，单位为环境步。正时间常数采用有界 log-space
+参数化，默认范围 0.1–100，初始化在 log-space 中从范围的 1% 到 99% 等距分布。
+当神经元只有一个时使用中点。门完全打开时，K 次更新的直接旧活动系数为 `exp(-1/T_i)`；一般为 `product(1-g_tick*(1-rho))`。
+候选活动仍依赖非线性反馈，因此这不是线性 SSM 的整体稳定性或长期记忆保证。
+独立写门是输入相关的 sigmoid 输出，门输出权重和偏置初始化为零，初始值 0.5。
+`write_scale=.1` 和 kappa 保持原值。门为0时活动不变，门为1时恢复原先完全开门的更新；
+历史窗口与同步仍继续更新。常量门和候选的总写入为
+`write_scale*kappa*g*candidate*sum((1-g*(1-rho))**j, j=0..K-1)`，
+一般依赖门、T和K；不再宣称任意门下写入预算不变。选择性保持仍需学习。
+
+跨环境步传递 `pre_trace`、`post_trace` 和派生读出 `deter`，当前活动直接取
+`post_trace[..., -1]`，没有新增递归记忆张量。递归活动本身不做 LayerNorm；
+LayerNorm 仍位于现有 synapse 内。每个新回合恢复零神经历史。
+新更新不是凸插值，活动不再限制于 [-1,1]；默认参数的保守前向幅度界约 10.05。
+tiny/small/medium 配置下，`deter` 的前 64 维原样复制当前活动，后 64 维为活动与同步的 tanh 投影。
+该默认配置的同步从全部 64 个神经元中固定等距选择 16 个（含两端），形成 136 个上三角配对，
+覆盖初始快慢尺度；不随训练中的时间常数动态排序。保持 `deter > neurons`。
+观测仍只进入 `q(z|deter,encoder(observation))`，下一转移通过 z 影响神经动态。
+真实过滤和 imagination 使用同一 `_transition`。
+
+decoder、continuation、actor 和 critic 继续读取 `[deter,stoch]`。
+reward 保留相同状态特征，并用产生当前奖励的 incoming action 调节第一层对原始活动的映射：
+
+```text
+deter = concat(activity, projected)
+reward_h0 = existing_activation_and_norm(
+    shared_kernel @ concat(projected, flatten(stoch))
+    + sum_k incoming_action[k] * action_kernel[k] @ activity)
+```
+
+离散 one-hot 动作使用加权求和，不使用 argmax；后续奖励隐藏层、255-bin 输出与 NLL 不变。
+连续动作使用 `[1, flatten(action)]` 的仿射条件权重，零动作仍保留基础活动映射。
+没有额外隐藏层、记忆或监督标签。当前两动作、64活动、512隐藏宽度只多32768个权重。
+训练仍把 outgoing action 右移为 incoming action，reset 行清零；想象状态
+`state[t+1]` 对应 `action[t]` 产生的奖励。想象轨迹用临时 `reward_action` 保存这个对齐，
+它不加入递归状态；首个 dummy 奖励仍排除。255-bin symlog 分布及其 NLL 不变。
+没有新增辅助 loss、奖励重加权或额外记忆网络；tick scale 默认 0。
+
+定义见 [docs/METHOD.md](docs/METHOD.md)，逐式对应见
+[docs/FORMULA_ALIGNMENT.md](docs/FORMULA_ALIGNMENT.md)，验证见
+[docs/VALIDATION.md](docs/VALIDATION.md)。这是借鉴 SSM 时间尺度思想的 CTM 变体，
+不声称原版 CTM/S3M 的原样复现或已有收敛保证。
+
+## 代码结构
+
+```text
+CTWM.py                       统一训练入口
+recall2imagine/nrsm_nets.py    CTM 神经递推、NLM、同步读出和 tick 诊断
+recall2imagine/reward_nets.py  奖励头第一层的动作条件读出
+recall2imagine/agent.py        世界模型和 Actor-Critic
+recall2imagine/configs.yaml    上游预设、ctwm、ctwm_smoke
+recall2imagine/embodied/       环境、回放、日志和训练
+scripts/                      GPU 和任务接口检查
+tests/                        数值、集成和保存恢复测试
+docs/                         方法、公式、验证和任务说明
+```
+
+上游 GRU/S3M 的文件保留以支持框架中的其他模型，CTWM 的 `nrsm` 路径不调用它们。
+
+## RTX 5090 / WSL 运行
+
+v13 checkpoint 只支持同架构、同配置恢复，拒载 v12 及更早版本，即使参数形状相同。
+旧版本的 replay 也包含模型状态，不能只删除顶层 checkpoint 后复用。
+安装说明见 [docs/GPU_RUNTIME.md](docs/GPU_RUNTIME.md)。
+
+下面是本次 `memory_len/100`、seed 0 实验的完整命令，**只在当前训练已停止、需要恢复时执行**。
+同一输出目录只能由一个训练进程写入。已有 checkpoint 和 replay 会按训练入口的恢复逻辑加载。
+若要从零开始另一次实验，保留参数并把 `--logdir` 换成尚不存在的新目录；不要删除当前实验的数据。
+
+```bash
+cd /mnt/c/Users/Administrator/Desktop/CTWMR2I
+source /home/administrator/.venvs/ctwm-r2i-gpu/bin/activate
+unset LD_LIBRARY_PATH CUDA_ROOT CUDA_PATH JAX_PLATFORMS JAX_PLATFORM_NAME
+export CUDA_VISIBLE_DEVICES=0
+export XLA_PYTHON_CLIENT_PREALLOCATE=false
+export JAX_COMPILATION_CACHE_DIR="$PWD/outputs/.jax_cache"
+
+python scripts/gpu_check.py --require-gpu && \
+python -u CTWM.py --configs small ctwm \
+  --jax.platform gpu --jax.precision float32 --jax.prealloc False \
+  --task bsuite_memory_len/100 --envs.amount 1 --envs.parallel none \
+  --batch_size 32 --batch_length 1024 --replay_size 10000000 \
+  --imag_horizon 15 --run.train_ratio 1024 --nrsm_tick_scale 0 \
+  --seed 0 --run.steps 1000000 --nrsm.memory 8 \
+  --logdir outputs/memory_len100_v13_seed0_fresh002
+```
+
+B32/T1024、1M 总预算、seed0 和原生稀疏奖励沿用当前实验。`small` 调整共享网络容量，
+CTM 神经元和同步读出大小由规模预设控制，见下表。`memory_len/100` 的 100 是原生记忆长度：每回合有
+101 次动作交互，连同 reset 共 102 条记录；终端总进度按记录数计数。
+首次执行需要图编译，CPU 短测不能代替正式 GPU 吞吐或收敛测量。
+
+## CTM 规模与活动历史窗口
+
+使用 `--configs tiny ctwm`、`small ctwm`、`medium ctwm` 或 `large ctwm` 选择规模。
+POPGym 示例为 `--configs medium popgym ctwm`。`ctwm` 放在最后仍保留所选的
+神经元、读出维度和历史窗口，不会把 `nrsm.memory` 重置为统一值。
+
+| 规模 | 神经元 | nrsm.memory（ticks） | ticks/环境步 | 显式窗口约覆盖环境步 | deter | 同步采样神经元 | 同步配对特征 |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| tiny | 64 | 8 | 4 | 2 | 128 | 16 | 136 |
+| small | 64 | 128 | 4 | 32 | 128 | 16 | 136 |
+| medium | 64 | 256 | 4 | 64 | 128 | 16 | 136 |
+| large | 128 | 256 | 4 | 64 | 192 | 32 | 528 |
+
+`tiny` 采用原 `small` 的共享网络参数：2 层、512 单元、CNN depth32、
+`rssm.deter=512`；再把 CTM 历史固定为原来的 8 ticks。`small` 共享网络仍为
+2×512，`medium` 仍为 3×640，`large` 仍为 4×768（任务预设可覆盖）。
+私有 NLM 隐藏宽度仍为 8，随机 latent 仍为 8×8，每环境步执行 4 ticks。
+`deter` 始终由 `neurons` 维原始活动和 64 维活动/同步投影组成。
+
+`pre_trace`、`post_trace` 的形状都是 `[B, neurons, nrsm.memory]`。
+每个内部 tick 追加一次活动，显式窗口约覆盖 `nrsm.memory / nrsm.ticks`
+个环境步；这不是递推记忆的最大持续时间。历史窗口同时用于私有 NLM 和同步读出。
+神经递推、门控、时间常数范围、奖励头计算方式、loss 和训练超参数保持原实现。
+
+改变窗口或神经元数量会改变参数和状态形状，新配置须用新的 `--logdir` 从头训练。
+恢复旧实验时，应使用其保存的完整配置。上面的旧 Memory Length 恢复命令已明确
+`--nrsm.memory 8`；旧的 `scripts/run_repeatprev_medium_m32_b16.sh` 则明确固定
+N128/deter192/sync32/M32/K4，保留原实验含义，不代表新的 medium 预设。
+正在运行的训练使用启动时加载的配置；已有实验的 config、checkpoint 和 replay 不变。
+
+共享 encoder/decoder/actor/critic 等仍遵循原有覆盖顺序，例如 `medium popgym ctwm`
+中，POPGym 会覆盖共享网络的层数和宽度。配置优先级为 defaults → 从左到右的
+presets → CLI；显式 `--nrsm.memory`、`--nrsm.ticks`、`--nrsm.neurons`、
+`--nrsm.deter`、`--nrsm.sync_neurons` 最后生效，并须满足 `deter > neurons`、
+`sync_neurons <= neurons`。不选尺寸、单独使用 `ctwm` 时保留原 defaults（N64/M32/K4）；
+小规模检查继续使用 `--configs ctwm ctwm_smoke`（M3/K2）。
+
+长历史窗口会增加状态、NLM 参数及训练中间结果的显存开销；旧窗口可运行的 batch
+不能直接视为新窗口也可运行。本次只验证配置合并，不启动训练或宣称 GPU 显存已通过。
+
+## 默认 CTM 配置
+
+| 项目 | ctwm 默认值 |
+|---|---|
+| 数值精度 | float32，无混合精度 |
+| 神经动态 | 64 neurons，pre/post 各 32 ticks 历史，每环境步 4 ticks（窗口约 8 环境步） |
+| 神经元时间常数 | `time_constant_min=.1`、`time_constant_max=100`，单位环境步 |
+| Synapse | 两个 Linear → GLU → LayerNorm 块，输出 64 维 |
+| 私有 NLM | 每神经元独立，共享隐藏层输出 tanh 候选和 sigmoid 写门；门初值 0.5 |
+| 写入预算 | `write_scale=.1`；保留 expm1 系数，仅完全开门时校准 K 次写入 |
+| 同步 | 全部神经元间等距选 16 个、136 对；现有 learnable decay 及其公式保留 |
+| 确定性读出 | 原始活动 64 维直通＋活动/同步投影 64 维，合计 deter128 |
+| 随机 latent | 8×8 categoricals |
+| 预测/策略/价值状态输入 | `[deter,stoch]`，默认 192 维；奖励首层额外由 aligned incoming action 调节 |
+| 回放 | FIFO/LFS，10,000,000 条记录 |
+| 序列与想象 | 默认 batch4/length1024；正式命令 B32；H15 |
+| 基础 KL | dyn0.5、rep0.1，free threshold1；任务预设可覆盖 |
+| Tick KL | 默认 scale0，不加入训练目标 |
+
+`T_i` 属于模型参数，随 checkpoint 保存；它不是随回合变化的状态。
+在线神经历史和环境不保存到 checkpoint，因此恢复不能精确接续回合中的记忆。
+配置优先级为 defaults → presets → CLI，建议 `small`/任务预设在前、`ctwm` 在后。
+
+终端使用 tqdm，指标写入 metrics.jsonl，每回合原生回报写入 scores.jsonl。
+`run.log_every`、`run.save_every` 单位为秒。默认不上传 WandB。
+旧版验证只代表对应旧结构，当前通过项目以 docs/VALIDATION.md 为准。
+
+```bash
+python -m unittest discover -s tests -v
+python scripts/smoke_env.py --task bsuite_memory_len/4 bsuite_discounting_chain/10 \
+  --steps 256 --seed 0
+```
+
+模型测试应显式使用 CPU；GPU 环境检查用 `scripts/gpu_check.py --require-gpu`。
+TensorFlow 不是模型执行引擎。其他任务依赖与支持边界见
+[docs/TASK_SUPPORT.md](docs/TASK_SUPPORT.md)。保留上游 [LICENSE](LICENSE) 与
+[UPSTREAM_README.md](UPSTREAM_README.md)。

@@ -1,0 +1,5 @@
+# Optional Atari dependencies for the existing Python 3.11 / Gym 0.26 runtime.
+# Install without upgrading the JAX/GPU or POPGym dependency sets.
+ale-py==0.8.1
+opencv-python-headless==4.11.0.86
+AutoROM==0.6.1

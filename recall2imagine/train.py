@@ -74,11 +74,13 @@ def main(argv=None):
       replay = make_replay(config, logdir / 'replay')
       eval_replay = make_replay(config, logdir / 'eval_replay', is_eval=True)
       env = make_envs(config)
-      eval_env = make_envs(config)  # mode='eval'
+      eval_config = config.update({'seed': int(config.seed) + 1000000})
+      eval_env = make_envs(eval_config)
       cleanup += [env, eval_env]
       agent = agt.Agent(env.obs_space, env.act_space, step, config)
+      replay.set_agent(agent)
       embodied.run.train_eval(
-          agent, env, eval_env, replay, eval_replay, logger, args)
+          agent, env, eval_env, replay, eval_replay, logger, args, config)
 
     elif args.script == 'train_holdout':
       replay = make_replay(config, logdir / 'replay')
@@ -208,7 +210,7 @@ def make_env(config, worker=0, **overrides):
     kwargs = yaml.YAML(typ='safe').load(config.env.kwargs)
   else:
     kwargs = dict(config.env.get(suite, {}))
-  if suite == 'bsuite' or (suite == 'gym' and 'popgym' in task.lower()):
+  if suite in ('bsuite', 'atari') or (suite == 'gym' and 'popgym' in task.lower()):
     kwargs.setdefault('seed', int(config.seed) + int(worker))
   kwargs.update(overrides)
   env = ctor(task, **kwargs)
